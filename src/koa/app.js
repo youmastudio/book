@@ -8,11 +8,7 @@ var template = require('./template-config.js');
 var app = require('koa')();
 app.use(template(dbConfig));
 app.use(database(dbConfig));
-app.use(function *(next) {
-    var start = new Date;
-    yield next;
-    var ms = new Date - start;
-    this.set('X-Response-Time', ms + 'ms');
-});
-router(app);
+app.use(router.static)
+app.use(router.controller)
 app.listen(3000);
+

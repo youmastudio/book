@@ -1,51 +1,48 @@
 var Router = require('koa-router');
 var send = require('koa-send');
-var static = new Router({
+var service = new Router({
     prefix: '/static'
 });
-static.get('/:name', function*(next) {
+service.get('/:path', function*(next) {
     yield send(this, this.path, {});
 });
-var system = new Router({
-    prefix: '/system'
+var manager = new Router();
+var method = ['get', 'post'];
+manager.register('/', method, function*(next) {
+    yield controller('home', 'index').call(this, '', next);
 });
-system.get('/', function*(next) {
-    yield this.render('index', {title: 'koa-hbs', body: '<p>body</p>', author: {firstName: 'z', lastName: ' jl'}});
+manager.register('/:controller', method, function*(next) {
+    yield controller(this.params['controller'], 'index').call(this, '', next);
 });
-system.get('/msg', function*(next) {
-    this.body = 'system msg '
-})
-var user = new Router({
-    prefix: '/user'
+manager.register('/:controller/:method', method, function*(next) {
+    yield controller(this.params['controller'], this.params['method']).call(this, '', next);
 });
-user.get('/msg', function*(next) {
-    this.body = 'user msg '
+manager.register('/:controller/:method/:param', method, function*(next) {
+    yield controller(this.params['controller'], this.params['method']).call(this, this.params['param'], next);
 });
-var home = new Router();
-home.get('/', function *() {
-    var context = this;
-    var collection = yield new Promise(function (resolve, reject) {
-        context.database.collection('mark', {safe: true}, function (err, collection) {
-            var back = !err ? resolve(collection) : reject(err);
-        });
-    })
-    var tmp1 = {id: process.hrtime(), title: 'hello', number: 1};
-    var data = yield new Promise(function (resolve, reject) {
-        collection.insert(tmp1, {safe: true}, function (err, result) {
-            var back = !err ? resolve(result) : reject(err);
-        });
-    })
-    var body = yield new Promise(function (resolve, reject) {
-        collection.find({}).toArray(function (err, result) {
-            var back = !err ? resolve(result) : reject(err);
-        });
-    })
-    this.body = body;
+manager.register('/:controller/:method/:param/*', method, function*(next) {
+    yield controller(this.params['controller'], this.params['method']).call(this, this.params['param'], next);
 });
-
-module.exports = function (app) {
-    app.use(static.routes());
-    app.use(system.routes());
-    app.use(user.routes());
-    app.use(home.routes());
+function controller(controller, method) {
+    controller = controller || 'home';
+    method = method || 'index';
+    var controllerEntity = undefined;
+    try {
+        controllerEntity = require('./controller/' + controller + '.js');
+    } catch (msg) {
+        return error();
+    }
+    if (!controllerEntity) {
+        return error();
+    }
+    if (!controllerEntity[method] || typeof controllerEntity[method] != 'function') {
+        return controllerEntity['error'] || error();
+    }
+    return controllerEntity[method]
 }
+function error() {
+    var controller = require('./controller/globel.js');
+    return controller['error'];
+}
+module.exports.static = service.routes();
+module.exports.controller = manager.routes();
